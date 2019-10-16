@@ -1,0 +1,133 @@
+---
+title: "Coursera Practical Machine Learning Final Project"
+author: "Xiao Wang"
+date: "2019/10/15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+
+In this project, my goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <http://groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset).
+
+## Data preperation
+
+### Load related libraries
+```{r,message=FALSE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+```
+
+### Loading data
+```{r}
+training <- read.csv("C:/Users/SuperWang/Desktop/pml-training.csv")
+testing  <- read.csv("C:/Users/SuperWang/Desktop/pml-testing.csv")
+```
+
+### Data cleaning & preperation
+First,since a varible with almost zero variance, it doesn't have classfication ability, and the Near Zero variance (NZV) variables are also removed and the ID variables as well. 
+```{r}
+NZV <- nearZeroVar(training)
+TrainSet <- training[, -NZV]
+TestSet  <- testing[, -NZV]
+```
+Second,when variables contain more than 90% missing values, we delete these variables.
+```{r}
+# remove variables that are have 90% NA
+AllNA<- sapply(TrainSet, function(x) mean(is.na(x)) > 0.9)
+TrainSet <- TrainSet[, AllNA==FALSE]
+TestSet  <- TestSet[, AllNA==FALSE]
+```
+Third,the training dataset is then partinioned in 2 to create a Training set (70% of the data) for the modeling process and a Test set (with the remaining 30%) for the validations. The testing dataset is not changed and will only be used for the quiz results generation.
+```{r}
+Train  <- createDataPartition(TrainSet$classe, p=0.7, list=FALSE)
+Traindata <- TrainSet[Train, ]
+Testdata  <- TrainSet[-Train, ]
+```
+Moreover, delete identification only variables (columns 1 to 5)
+```{r}
+Traindata<-Traindata[,-c(1:5)]
+Testdata<-Testdata[,-c(1:5)]
+```
+
+## Prediction Models Building & selection
+
+### Method: Decision Trees
+```{r,cache=TRUE}
+set.seed(12345)
+mod1 <- rpart(classe ~ ., data=Traindata, method="class")
+```
+
+Prediction on Testdata & Accuracy
+
+```{r,cache=TRUE}
+# prediction on Test dataset
+predictmod1 <- predict(mod1, newdata=Testdata, type="class")
+CMOD1 <- confusionMatrix(predictmod1, Testdata$classe)
+CMOD1
+```
+
+*The Accuracy of decision trees model is 75.14%*
+
+### Method:Random Forest
+```{r,cache=TRUE}
+set.seed(12345)
+controlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+mod2 <- train(classe ~ ., data=Traindata, method="rf",trControl=controlRF)
+mod2
+```
+
+Prediction on Testdata & Accuracy
+```{r}
+# prediction on Test dataset
+predictmod2 <- predict(mod2, newdata=Testdata, type="raw")
+CMOD2 <- confusionMatrix(predictmod2, Testdata$classe)
+CMOD2
+```
+
+*The Accuracy of random forest model is 99.55%*
+
+### Method: Generalized Boosted Model
+```{r,cache=TRUE}
+set.seed(12345)
+controlGBM <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+mod3  <- train(classe ~ ., data=Traindata, method = "gbm",trControl = controlGBM, verbose = FALSE)
+```
+
+Prediction on Testdata & Accuracy
+
+
+```{r£¬cache=TRUE}
+# prediction on Test dataset
+predictmod3 <- predict(mod3, newdata=Testdata, type="raw")
+CMOD3 <- confusionMatrix(predictmod3, Testdata$classe)
+CMOD3
+```
+
+*The Accuracy of Generalized Boosted Model is 98.57% *
+
+## Applying the Selected Model to the Test Data
+
+The accuracy of the 3 modeling methods above are:
+
+Random Forest : 99.55%
+
+Decision Tree : 75.14%
+
+GBM : 98.57%
+
+In that case, the  will be applied to predict the 20 quiz results (testing dataset) as shown below.
+```{r}
+predictTEST <- predict(mod2, newdata=TestSet)
+predictTEST
+```
+
